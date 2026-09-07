@@ -24,7 +24,7 @@
   .status.err{color:#dc2626}
   table{width:100%;border-collapse:collapse;margin-top:.75rem;font-size:.92rem}
   th,td{text-align:left;padding:.35rem .5rem;border-bottom:1px solid var(--line)}
-  tr.quota td{font-weight:700;background:#eff6ff}
+  /* mise en valeur des rangs retiree: le tirage n'implique pas d'acceptation */
   .catwrap{display:grid;grid-template-columns:1fr 1fr 1fr;gap:1rem}
   @media (max-width:700px){.catwrap{grid-template-columns:1fr}}
   code{background:#f1f5f9;padding:.1rem .3rem;border-radius:4px;font-size:.85em}
@@ -49,7 +49,8 @@
       <li>Les personnels éligibles (Chercheur/EC, Ingénieur, Post-doctorant) ont chacun reçu un identifiant à 4 chiffres, sans lien devinable avec leur nom. La table de correspondance nom↔ID est déposée auprès de la direction et n'est pas publiée.</li>
       <li>Seule la liste des ID, groupés par catégorie, est publiée ci-dessous (aucun nom).</li>
       <li>La source d'aléa est un tirage public et vérifiable de <a href="https://drand.love" target="_blank" rel="noopener">drand</a> (League of Entropy) : on saisit un numéro de round choisi à l'avance, on récupère sa randomness publique, qui sert de graine (seed) au tirage.</li>
-      <li>Le tirage produit une liste ordonnée complète (pas juste les personnes retenues) pour chaque catégorie. Les quotas retenus — <strong>5 Chercheur/EC, 5 Ingénieur, 2 Post-doctorant</strong> — sont marqués sur la liste ; on continue vers le rang suivant en cas de refus.</li>
+      <li>Le tirage produit une liste ordonnée complète (pas juste les personnes retenues) pour chaque catégorie. Les quotas retenus — <strong>5 Chercheur/EC, 5 Ingénieur, 2 Post-doctorant</strong> — servent de repère pour le contact : on avance dans l'ordre de la liste et on s'arrête une fois le quota atteint par catégorie, en passant au rang suivant en cas de refus.</li>
+      <li>Le CSV de la liste tirée est sauvegardable directement depuis cette page une fois le tirage effectué.</li>
       <li>Le tiers dépositaire fait la correspondance ID→nom pour contacter individuellement les personnes tirées, dans l'ordre.</li>
     </ol>
     <p class="muted">Tirage entièrement reproductible : n'importe qui peut resaisir le même round et vérifier qu'il obtient le même ordre.</p>
@@ -71,7 +72,10 @@
 
   <div class="card">
     <h2 style="margin-top:0">2. Lancer le tirage</h2>
-    <button id="drawBtn" disabled>Tirer les listes ordonnées</button>
+    <div class="row">
+      <button id="drawBtn" disabled>Tirer les listes ordonnées</button>
+      <button id="saveBtn" class="secondary" disabled>Sauvegarder la liste (CSV)</button>
+    </div>
     <div id="drawStatus" class="status"></div>
   </div>
 
@@ -141,20 +145,39 @@ document.getElementById("drawBtn").addEventListener("click", () => {
   resultsEl.innerHTML = "";
   const wrap = document.createElement("div");
   wrap.className = "card catwrap";
+  lastDraw = {};
 
   for (const cat of Object.keys(idsByCat)) {
     const ordered = shuffle(idsByCat[cat], rng);
-    const quota = QUOTAS[cat] || 0;
+    lastDraw[cat] = ordered;
     const box = document.createElement("div");
     box.innerHTML = `<h3>${cat} (${ordered.length})</h3>
       <table><thead><tr><th>#</th><th>ID</th></tr></thead><tbody>
-      ${ordered.map((id, i) => `<tr class="${i < quota ? 'quota' : ''}"><td>${i+1}</td><td class="id">${id}</td></tr>`).join("")}
+      ${ordered.map((id, i) => `<tr><td>${i+1}</td><td class="id">${id}</td></tr>`).join("")}
       </tbody></table>`;
     wrap.appendChild(box);
   }
   resultsEl.appendChild(wrap);
-  statusEl.textContent = `Tirage effectué (seed dérivée du round drand). Lignes en surbrillance = quota (${QUOTAS["Chercheur/EC"]}/${QUOTAS["Ingénieur"]}/${QUOTAS["Post-doctorant"]}).`;
+  statusEl.textContent = `Tirage effectué (seed dérivée du round drand ${document.getElementById("round").value}). Quotas de reference : ${QUOTAS["Chercheur/EC"]} Chercheur/EC, ${QUOTAS["Ingénieur"]} Ingénieur, ${QUOTAS["Post-doctorant"]} Post-doctorant — s'arreter une fois le quota atteint, en avancant dans l'ordre en cas de refus.`;
   statusEl.className = "status ok";
+  document.getElementById("saveBtn").disabled = false;
+});
+
+let lastDraw = null;
+document.getElementById("saveBtn").addEventListener("click", () => {
+  if (!lastDraw) return;
+  let csv = "Categorie;Rang;ID\n";
+  for (const cat of Object.keys(lastDraw)) {
+    lastDraw[cat].forEach((id, i) => { csv += `${cat};${i+1};${id}\n`; });
+  }
+  const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  const round = document.getElementById("round").value || "round";
+  a.href = url;
+  a.download = `tirage_FI_round${round}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
 });
 </script>
 </body>
