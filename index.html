@@ -24,7 +24,8 @@
   .status.err{color:#dc2626}
   table{width:100%;border-collapse:collapse;margin-top:.75rem;font-size:.92rem}
   th,td{text-align:left;padding:.35rem .5rem;border-bottom:1px solid var(--line)}
-  /* mise en valeur des rangs retiree: le tirage n'implique pas d'acceptation */
+  .version-banner{background:#1e293b;color:#fff;font-family:ui-monospace,Menlo,monospace;font-size:.82rem;padding:.5rem .8rem;border-radius:6px;margin-top:1rem;word-break:break-all}
+  .version-banner b{color:#93c5fd}
   .catwrap{display:grid;grid-template-columns:1fr 1fr 1fr;gap:1rem}
   @media (max-width:700px){.catwrap{grid-template-columns:1fr}}
   code{background:#f1f5f9;padding:.1rem .3rem;border-radius:4px;font-size:.85em}
@@ -55,6 +56,8 @@
     </ol>
     <p class="muted">Tirage entièrement reproductible : n'importe qui peut resaisir le même round et vérifier qu'il obtient le même ordre.</p>
   </div>
+
+  <div id="versionBanner" class="version-banner">Vérification de la version des données…</div>
 
   <div class="card">
     <h2 style="margin-top:0">1. Choisir le round drand</h2>
@@ -88,7 +91,14 @@ const QUOTAS = { "Chercheur/EC": 5, "Ingénieur": 5, "Post-doctorant": 2 };
 let idsByCat = null;
 let randomnessHex = null;
 
-fetch("ids_public.json").then(r => r.json()).then(d => { idsByCat = d; });
+fetch("ids_public.json").then(r => r.arrayBuffer()).then(async buf => {
+  idsByCat = JSON.parse(new TextDecoder("utf-8").decode(buf));
+  const digest = await crypto.subtle.digest("SHA-256", buf);
+  const hex = Array.from(new Uint8Array(digest)).map(b => b.toString(16).padStart(2, "0")).join("");
+  const short = hex.slice(0, 12);
+  document.getElementById("versionBanner").innerHTML =
+    `<b>Version des données (empreinte ids_public.json) :</b> ${short} — à comparer avec la table déposée auprès de la Direction avant tout contact.`;
+});
 
 document.getElementById("fetchBtn").addEventListener("click", async () => {
   const round = document.getElementById("round").value.trim();
