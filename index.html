@@ -66,6 +66,8 @@
       <div>
         <label for="round">Numéro de round</label>
         <input id="round" type="number" min="1" placeholder="ex. 5347804">
+        <div id="roundHint" class="muted" style="margin-top:.3rem;font-size:.82rem"></div>
+        <div id="roundWarning" class="status err" style="display:none"></div>
       </div>
       <button id="fetchBtn">Récupérer la randomness</button>
     </div>
@@ -100,11 +102,42 @@ fetch("ids_public.json").then(r => r.arrayBuffer()).then(async buf => {
     `<b>Version des données (empreinte ids_public.json) :</b> ${short} — à comparer avec la table déposée auprès de la Direction avant tout contact.`;
 });
 
+let currentRound = null;
+fetch("https://api.drand.sh/public/latest").then(r => r.json()).then(d => {
+  currentRound = d.round;
+  document.getElementById("roundHint").textContent =
+    `Round actuel (référence, ~1 round toutes les 30s) : ${currentRound}. Choisis un round passé (déjà émis) ou proche dans le futur.`;
+  validateRound();
+}).catch(() => {
+  document.getElementById("roundHint").textContent = "Impossible de récupérer le round actuel pour référence (hors-ligne ?).";
+});
+
+function validateRound() {
+  const val = document.getElementById("round").value.trim();
+  const warnEl = document.getElementById("roundWarning");
+  const fetchBtn = document.getElementById("fetchBtn");
+  if (!val) { warnEl.style.display = "none"; fetchBtn.disabled = false; return true; }
+  const n = Number(val);
+  if (!Number.isInteger(n) || n < 1) {
+    warnEl.textContent = "Le round doit être un entier positif.";
+    warnEl.style.display = "block"; fetchBtn.disabled = true; return false;
+  }
+  if (currentRound && n > currentRound + 100000) {
+    warnEl.textContent = `Round trop éloigné dans le futur (actuel ≈ ${currentRound}, +100000 rounds ≈ +1 mois). Il ne sera pas encore émis.`;
+    warnEl.style.display = "block"; fetchBtn.disabled = true; return false;
+  }
+  warnEl.style.display = "none"; fetchBtn.disabled = false; return true;
+}
+document.getElementById("round").addEventListener("input", validateRound);
+
 document.getElementById("fetchBtn").addEventListener("click", async () => {
+  if (!validateRound()) return;
   const round = document.getElementById("round").value.trim();
   const statusEl = document.getElementById("fetchStatus");
   const outEl = document.getElementById("randomnessOut");
   document.getElementById("drawBtn").disabled = true;
+  outEl.innerHTML = "";
+  randomnessHex = null;
   if (!round) { statusEl.textContent = "Indiquez un numéro de round."; statusEl.className = "status err"; return; }
   statusEl.textContent = "Récupération en cours…"; statusEl.className = "status";
   try {
@@ -119,6 +152,8 @@ document.getElementById("fetchBtn").addEventListener("click", async () => {
   } catch (e) {
     statusEl.textContent = "Erreur : " + e.message;
     statusEl.className = "status err";
+    outEl.innerHTML = "";
+    randomnessHex = null;
   }
 });
 
